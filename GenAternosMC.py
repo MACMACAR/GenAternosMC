@@ -1,5 +1,4 @@
 import os
-import undetected_chromedriver as uc
 from colorama import Fore, Style
 from selenium import webdriver
 from selenium.webdriver.common.by import By
