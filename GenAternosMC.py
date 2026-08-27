@@ -44,7 +44,7 @@ def setup_chrome_driver():
     chrome_options.add_argument("start-maximized")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.binary_location = "/usr/bin/google-chrome-stable"
+    chrome_options.binary_location = "/usr/bin/chromium-browser"
     user_agent_str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36"
     chrome_options.add_argument(f"--user-agent={user_agent_str}")
     return uc.Chrome(options=chrome_options)
