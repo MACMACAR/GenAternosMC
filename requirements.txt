@@ -1,5 +1,4 @@
 selenium
-undetected-chromedriver
 flask
 colorama
 setuptools
