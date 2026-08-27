@@ -3,3 +3,4 @@ undetected-chromedriver
 flask
 colorama
 setuptools
+wheel
