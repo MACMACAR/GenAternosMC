@@ -1,14 +1,15 @@
 import os
-from flask import Flask
-import threading
 import time
 import random
 import json
+import threading
+from flask import Flask
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import WebDriverException
 
 # ========== Flask для пинга ==========
 app = Flask('')
@@ -24,7 +25,7 @@ flask_thread = threading.Thread(target=run_flask, daemon=True)
 # ====================================
 
 def setup_remote_driver():
-    """Подключается к Selenium Standalone Chrome (отдельный сервис)"""
+    """Подключается к Selenium Standalone Chrome с автоопределением хоста"""
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -35,16 +36,35 @@ def setup_remote_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
 
-    # Внутри Railway используем внутренний адрес сервиса "selenium"
-    # Название сервиса задаётся при создании, по умолчанию "selenium"
-    driver = webdriver.Remote(
-        command_executor="http://selenium:4444/wd/hub",
-        options=options
-    )
-    return driver
+    # Получаем хост из переменной окружения или пробуем стандартные имена
+    host = os.environ.get('SELENIUM_HOST')
+    if host:
+        candidates = [host]
+    else:
+        candidates = ['selenium-standalone', 'selenium']  # порядок важен
+
+    last_error = None
+    for candidate in candidates:
+        command_executor = f"http://{candidate}:4444/wd/hub"
+        print(f'[GenAternosMC] Пробую подключиться к Selenium: {command_executor}')
+        try:
+            driver = webdriver.Remote(
+                command_executor=command_executor,
+                options=options
+            )
+            # Проверяем, что соединение установлено
+            driver.get('about:blank')
+            print(f'[GenAternosMC] Успешно подключено к {command_executor}')
+            return driver
+        except Exception as e:
+            last_error = e
+            print(f'[GenAternosMC] Ошибка подключения к {command_executor}: {e}')
+            continue
+
+    raise Exception(f'Не удалось подключиться ни к одному из хостов: {candidates}. Последняя ошибка: {last_error}')
 
 def maintain_server_connection(driver):
-    print(f'[GenAternosMC] Инициализация поддержания активности сервера')
+    print('[GenAternosMC] Инициализация поддержания активности сервера')
     while True:
         try:
             extend_button = WebDriverWait(driver, 10).until(
@@ -52,9 +72,9 @@ def maintain_server_connection(driver):
                     (By.XPATH, '//div[@class="extend"]/button[@class="btn btn-tiny btn-success server-extend-end"]'))
             )
             extend_button.click()
-            print(f'[GenAternosMC] Соединение с сервером продлено')
+            print('[GenAternosMC] Соединение с сервером продлено')
         except KeyboardInterrupt:
-            print(f'[GenAternosMC] Получен сигнал прерывания (Ctrl+C)')
+            print('[GenAternosMC] Получен сигнал прерывания (Ctrl+C)')
             break
         except Exception as e:
             try:
@@ -139,6 +159,7 @@ if __name__ == '__main__':
 ╭──────────────────────────────────────────────────────╮
 │ Использование: python GenAternosMC.py               │
 │ (читает config.json)                                │
+│ Переменная окружения SELENIUM_HOST (опционально)    │
 ╰──────────────────────────────────────────────────────╯
 """)
     config_path = 'config.json'
