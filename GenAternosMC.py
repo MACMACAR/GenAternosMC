@@ -1,22 +1,19 @@
 import os
+from colorama import Fore, Style
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
+from datetime import datetime
 import random
 import json
 import threading
-from datetime import datetime
-
-from colorama import Fore, Style
 from flask import Flask
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-
-# === Flask-сервер для пинга (чтобы Railway не усыплял) ===
+# ========== Flask для пинга ==========
 app = Flask('')
 
 @app.route('/')
@@ -27,7 +24,7 @@ def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 flask_thread = threading.Thread(target=run_flask, daemon=True)
-# =====================================================
+# ====================================
 
 class LogManager:
     def log_to_file(self, message=None, filename='activity_log.txt'):
@@ -38,22 +35,26 @@ class LogManager:
     def delay_execution(self, seconds):
         time.sleep(seconds)
 
-# === НАСТРОЙКА ДРАЙВЕРА С ЯВНЫМ ПУТЁМ К CHROMIUM ===
 def setup_chrome_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    # Указываем путь к браузеру, который установится через aptfile
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    chrome_options.add_argument(f"--user-agent={user_agent}")
+
+    # Указываем пути к системному Chromium и chromedriver (установлены через Aptfile)
     chrome_options.binary_location = "/usr/bin/chromium-browser"
-    user_agent_str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36"
-    chrome_options.add_argument(f"--user-agent={user_agent_str}")
-    
-    service = Service(ChromeDriverManager().install())
+    service = Service(executable_path="/usr/bin/chromedriver")
+
     return webdriver.Chrome(service=service, options=chrome_options)
 
-# === ОСТАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ===
 def maintain_server_connection(driver):
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Инициализация поддержания активности сервера')
     while True:
@@ -97,6 +98,7 @@ def show_logo():
  | | |_ |/ _ \ '_ \  / /\ \| __/ _ \ '__| '_ \ / _ \/ __| |\/| | |     
  | |__| |  __/ | | |/ ____ \ ||  __/ |  | | | | (_) \__ \ |  | | |____ 
   \_____|\___|_| |_/_/    \_\__\___|_|  |_| |_|\___/|___/_|  |_|\_____|
+                                                                        
     """
     for line in logo_art.split('\n'):
         print(line)
@@ -132,7 +134,7 @@ def start_server(session_cookie, server_id, server_ip):
             time.sleep(3)
             print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер в процессе запуска...')
             time.sleep(35)
-            if 'Онлайн' in driver.find_element(By.XPATH, 
+            if 'Онлайн' in driver.find_element(By.XPATH,
                                                '//*[@id="read-our-tos"]/main/section/div[3]/div[2]/div[1]/div/span[1]/span').text:
                 print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер {Fore.LIGHTGREEN_EX}онлайн{Fore.LIGHTBLUE_EX}, поддержание соединения...')
                 maintain_server_connection(driver)
@@ -145,7 +147,6 @@ def start_server(session_cookie, server_id, server_ip):
         print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTYELLOW_EX}Произошла ошибка: {Fore.LIGHTRED_EX}{e}')
     finally:
         driver.quit()
-        driver.close()
 
 if __name__ == '__main__':
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -159,7 +160,9 @@ if __name__ == '__main__':
 ╰─────────────────────────────────━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─────────────────────────────╯
 """)
 
+    log_manager = LogManager()
     config_path = 'config.json'
+
     with open(config_path, 'r') as config_file:
         config = json.load(config_file)
         ip_address = config['aternos_server']['ip']
@@ -170,6 +173,7 @@ if __name__ == '__main__':
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сервера: {Fore.LIGHTGREEN_EX}{server_identifier}{Style.RESET_ALL}')
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сессии: {Fore.LIGHTGREEN_EX}{session_id}{Style.RESET_ALL}')
 
+    # Запуск Flask
     flask_thread.start()
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Flask-сервер запущен на порту 8080 для пинга')
 
