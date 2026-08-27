@@ -10,16 +10,30 @@ import json
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+# === ДОБАВЛЕНО: Flask для пинга (чтобы Railway не усыплял) ===
+from flask import Flask
+import threading
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I'm alive!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+# Запускаем Flask в отдельном потоке (будет запущен позже)
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+# ============================================================
+
 # Класс для логирования сообщений с отметками времени и записи их в файл
 class LogManager:
-
-    # Логгирование сообщений в файл
     def log_to_file(self, message=None, filename='activity_log.txt'):
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(filename, 'a') as file:
             file.write(f'[{current_time}] {message}\n')
 
-    # Функция паузы на заданное количество секунд
     def delay_execution(self, seconds):
         time.sleep(seconds)
 
@@ -154,4 +168,9 @@ if __name__ == '__main__':
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сервера: {Fore.LIGHTGREEN_EX}{server_identifier}{Style.RESET_ALL}')
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сессии: {Fore.LIGHTGREEN_EX}{session_id}{Style.RESET_ALL}')
 
+    # === ЗАПУСКАЕМ FLASK-СЕРВЕР ДЛЯ ПИНГА ===
+    flask_thread.start()
+    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Flask-сервер запущен на порту 8080 для пинга')
+
+    # === ЗАПУСКАЕМ ОСНОВНУЮ ЛОГИКУ ===
     start_server(session_id, server_identifier, ip_address)
