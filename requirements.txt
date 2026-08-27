@@ -1,6 +1,3 @@
 selenium
 flask
 colorama
-setuptools
-wheel
-webdriver-manager
