@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # ========== Flask для пинга ==========
 app = Flask('')
@@ -65,31 +65,50 @@ def handle_ad_popup(driver):
         return False
 
 def get_server_status(driver):
-    """Возвращает текст статуса сервера (Оффлайн, Запуск, Онлайн)"""
-    try:
-        # Пробуем найти элемент статуса по разным селекторам
-        selectors = [
-            "//span[@class='server-status']",  # частая структура
-            "//span[contains(@class, 'status')]",
-            "//div[@class='server-status']/span",
-            "//*[@id='read-our-tos']/main/section/div[3]/div[2]/div[1]/div/span[1]/span"  # старый, на случай
-        ]
-        for xp in selectors:
-            try:
-                elem = driver.find_element(By.XPATH, xp)
-                text = elem.text.strip()
-                if text:
-                    return text
-            except:
-                continue
-        return None
-    except:
+    """
+    Возвращает статус сервера, ища по тексту на странице.
+    Ищет слова 'Онлайн', 'Оффлайн', 'Запуск' в любом элементе.
+    """
+    # Даём странице время для полной загрузки
+    time.sleep(5)
+    
+    # Получаем весь текст страницы
+    page_text = driver.find_element(By.TAG_NAME, 'body').text
+    print(f'[DEBUG] Текст страницы: {page_text[:500]}...')  # для отладки
+    
+    # Ищем ключевые слова
+    if 'Онлайн' in page_text or 'Online' in page_text:
+        return 'Онлайн'
+    elif 'Оффлайн' in page_text or 'Offline' in page_text:
+        return 'Оффлайн'
+    elif 'Запуск' in page_text or 'Starting' in page_text:
+        return 'Запуск'
+    else:
+        # Попробуем найти элемент статуса по классу или ID
+        try:
+            # Возможные селекторы
+            selectors = [
+                "//span[contains(@class, 'server-status')]",
+                "//div[contains(@class, 'status')]//span",
+                "//span[@id='server-status']",
+                "//div[@class='server-status']"
+            ]
+            for xp in selectors:
+                try:
+                    elem = driver.find_element(By.XPATH, xp)
+                    text = elem.text.strip()
+                    if text:
+                        return text
+                except:
+                    continue
+        except:
+            pass
         return None
 
 def click_start_button(driver):
     """Нажимает кнопку 'Запустить' или 'Start'"""
     try:
-        # Ищем кнопку по тексту или ID
+        # Ищем кнопку по тексту
         start_btn = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Запустить') or contains(text(), 'Start')]"))
         )
@@ -121,20 +140,42 @@ def maintain_server_connection(driver):
     print('[GenAternosMC] Начинаю поддержание сервера')
     while True:
         try:
-            # Пытаемся продлить
-            if extend_server(driver):
-                print('[GenAternosMC] Сервер продлён на +1 минуту')
+            # Проверяем статус перед продлением
+            status = get_server_status(driver)
+            print(f'[GenAternosMC] Текущий статус: {status}')
+            
+            if status == 'Онлайн' or status == 'Online':
+                # Пытаемся продлить
+                if extend_server(driver):
+                    print('[GenAternosMC] Сервер продлён на +1 минуту')
+                else:
+                    print('[GenAternosMC] Кнопка продления не найдена, возможно, нужно обновить страницу')
+                    driver.refresh()
+                    time.sleep(5)
+                    # Повторяем попытку
+                    if extend_server(driver):
+                        print('[GenAternosMC] Сервер продлён после обновления')
+            elif status == 'Оффлайн' or status == 'Offline':
+                print('[GenAternosMC] Сервер оффлайн, запускаем...')
+                if click_start_button(driver):
+                    print('[GenAternosMC] Кнопка запуска нажата, ждём...')
+                    time.sleep(40)
+                else:
+                    print('[GenAternosMC] Не удалось нажать кнопку запуска')
+            elif status == 'Запуск' or status == 'Starting':
+                print('[GenAternosMC] Сервер запускается, ждём...')
+                time.sleep(40)
             else:
-                print('[GenAternosMC] Кнопка продления не найдена, проверяем статус...')
+                print('[GenAternosMC] Неизвестный статус, пробуем обновить страницу')
+                driver.refresh()
+                time.sleep(5)
+                # Проверим ещё раз
                 status = get_server_status(driver)
-                print(f'[GenAternosMC] Статус сервера: {status}')
-                if status and ("Оффлайн" in status or "Offline" in status):
-                    print('[GenAternosMC] Сервер оффлайн, пробуем запустить...')
-                    if click_start_button(driver):
-                        print('[GenAternosMC] Кнопка запуска нажата, ждём...')
-                        time.sleep(35)  # ждём запуска
-                    else:
-                        print('[GenAternosMC] Не удалось нажать кнопку запуска')
+                if status:
+                    print(f'[GenAternosMC] После обновления статус: {status}')
+                    continue
+                else:
+                    print('[GenAternosMC] Статус не определён, возможно, страница загружена не полностью')
             
             # Пауза перед следующим циклом (проверяем каждые 30-60 секунд)
             wait_time = random.randint(30, 60)
@@ -167,7 +208,7 @@ def start_server(session_cookie, server_id, server_ip):
         # Переходим на страницу серверов
         driver.get('https://aternos.org/servers/')
         print('[GenAternosMC] Открыта страница /servers/')
-        time.sleep(3)
+        time.sleep(5)  # Даём странице загрузиться
         
         # Устанавливаем куки
         driver.add_cookie({'name': 'ATERNOS_SESSION', 'value': session_cookie})
@@ -177,14 +218,14 @@ def start_server(session_cookie, server_id, server_ip):
         # Переходим на страницу конкретного сервера
         driver.get('https://aternos.org/server/')
         print('[GenAternosMC] Переход на /server/')
-        time.sleep(5)  # даём странице загрузиться
+        time.sleep(10)  # Даём странице загрузиться, особенно динамическому контенту
         
         # Закрываем рекламный попап
         handle_ad_popup(driver)
         
         # Обновляем, чтобы применились куки
         driver.refresh()
-        time.sleep(3)
+        time.sleep(10)
         handle_ad_popup(driver)
         
         # Получаем статус сервера
@@ -193,57 +234,53 @@ def start_server(session_cookie, server_id, server_ip):
         
         if status is None:
             print('[GenAternosMC] Не удалось определить статус. Возможно, страница не загружена.')
-            # Попробуем обновить ещё раз
+            # Попробуем обновить ещё раз с большим ожиданием
             driver.refresh()
-            time.sleep(5)
+            time.sleep(15)
             status = get_server_status(driver)
             print(f'[GenAternosMC] Статус после обновления: {status}')
         
         # Действия в зависимости от статуса
-        if status and ("Оффлайн" in status or "Offline" in status):
+        if status in ['Оффлайн', 'Offline']:
             print('[GenAternosMC] Сервер оффлайн, запускаем...')
             if click_start_button(driver):
-                print('[GenAternosMC] Кнопка запуска нажата')
-                time.sleep(35)  # ждём запуска
-                # Проверим статус через 35 сек
+                print('[GenAternosMC] Кнопка запуска нажата, ждём 40 секунд...')
+                time.sleep(40)
+                # Проверим статус после ожидания
                 new_status = get_server_status(driver)
                 print(f'[GenAternosMC] Статус после запуска: {new_status}')
-                if new_status and ("Онлайн" in new_status or "Online" in new_status):
+                if new_status in ['Онлайн', 'Online']:
                     print('[GenAternosMC] Сервер запущен!')
                     maintain_server_connection(driver)
                 else:
-                    print('[GenAternosMC] Сервер не запустился, пытаемся снова...')
-                    # можно повторить попытку или перезапустить цикл
+                    print('[GenAternosMC] Сервер не запустился, переходим в режим поддержания (цикл попыток)')
+                    maintain_server_connection(driver)
             else:
-                print('[GenAternosMC] Не удалось нажать кнопку запуска')
+                print('[GenAternosMC] Не удалось нажать кнопку запуска, переходим в цикл поддержания')
+                maintain_server_connection(driver)
         
-        elif status and ("Запуск" in status or "Starting" in status):
-            print('[GenAternosMC] Сервер запускается, ждём...')
-            time.sleep(35)
+        elif status in ['Запуск', 'Starting']:
+            print('[GenAternosMC] Сервер запускается, ждём 40 секунд...')
+            time.sleep(40)
             new_status = get_server_status(driver)
             print(f'[GenAternosMC] Статус после ожидания: {new_status}')
-            if new_status and ("Онлайн" in new_status or "Online" in new_status):
+            if new_status in ['Онлайн', 'Online']:
                 print('[GenAternosMC] Сервер онлайн!')
                 maintain_server_connection(driver)
             else:
                 print('[GenAternosMC] Сервер не перешёл в онлайн, пробуем запустить заново...')
                 if click_start_button(driver):
                     print('[GenAternosMC] Повторный запуск')
-                    time.sleep(35)
-                    maintain_server_connection(driver)
+                    time.sleep(40)
+                maintain_server_connection(driver)
         
-        elif status and ("Онлайн" in status or "Online" in status):
+        elif status in ['Онлайн', 'Online']:
             print('[GenAternosMC] Сервер уже онлайн!')
             maintain_server_connection(driver)
         
         else:
-            print('[GenAternosMC] Неизвестный статус, пробуем запустить принудительно...')
-            if click_start_button(driver):
-                print('[GenAternosMC] Принудительный запуск')
-                time.sleep(35)
-                maintain_server_connection(driver)
-            else:
-                print('[GenAternosMC] Не удалось запустить сервер.')
+            print('[GenAternosMC] Неизвестный статус, переходим в режим поддержания (цикл попыток)')
+            maintain_server_connection(driver)
         
     except KeyboardInterrupt:
         print('[GenAternosMC] Прерывание пользователем')
