@@ -1,18 +1,22 @@
 import os
-from colorama import Fore, Style
-from selenium import webdriver
-from selenium.webdriver.common.by import By
 import time
-from datetime import datetime
 import random
 import json
+import threading
+from datetime import datetime
+
+from colorama import Fore, Style
+from flask import Flask
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
-# === ДОБАВЛЕНО: Flask для пинга (чтобы Railway не усыплял) ===
-from flask import Flask
-import threading
-
+# === Flask-сервер для пинга (чтобы Railway не усыплял) ===
 app = Flask('')
 
 @app.route('/')
@@ -22,11 +26,9 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
-# Запускаем Flask в отдельном потоке (будет запущен позже)
 flask_thread = threading.Thread(target=run_flask, daemon=True)
-# ============================================================
+# =====================================================
 
-# Класс для логирования сообщений с отметками времени и записи их в файл
 class LogManager:
     def log_to_file(self, message=None, filename='activity_log.txt'):
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -36,24 +38,22 @@ class LogManager:
     def delay_execution(self, seconds):
         time.sleep(seconds)
 
-# Настройка и инициализация драйвера Chrome с заданными опциями
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
-
+# === НАСТРОЙКА ДРАЙВЕРА С ЯВНЫМ ПУТЁМ К CHROMIUM ===
 def setup_chrome_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    # Указываем путь к браузеру, который установится через aptfile
+    chrome_options.binary_location = "/usr/bin/chromium-browser"
     user_agent_str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36"
     chrome_options.add_argument(f"--user-agent={user_agent_str}")
     
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=chrome_options)
-# Функция поддержания активности сервера
+
+# === ОСТАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ===
 def maintain_server_connection(driver):
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Инициализация поддержания активности сервера')
     while True:
@@ -68,15 +68,17 @@ def maintain_server_connection(driver):
             print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Получен сигнал прерывания (Ctrl+C)')
             break
         except Exception as e:
-            timer_text = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located(
-                    (By.XPATH, '//*[@id="read-our-tos"]/main/section/div[3]/div[2]/div[1]/div/div/div[1]/div[1]/div'))
-            ).text
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Таймер: {Fore.LIGHTGREEN_EX}{timer_text}{Style.RESET_ALL}')
+            try:
+                timer_text = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located(
+                        (By.XPATH, '//*[@id="read-our-tos"]/main/section/div[3]/div[2]/div[1]/div/div/div[1]/div[1]/div'))
+                ).text
+                print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Таймер: {Fore.LIGHTGREEN_EX}{timer_text}{Style.RESET_ALL}')
+            except:
+                pass
             handle_ad_popup(driver)
             time.sleep(random.randint(1, 7))
 
-# Функция обработки всплывающего окна с рекламой
 def handle_ad_popup(driver):
     try:
         ad_popup_button = driver.find_element(By.XPATH, '//div[contains(text(), "Всё равно продолжить с блокировщиком рекламы")]')
@@ -86,7 +88,6 @@ def handle_ad_popup(driver):
     except:
         return False
 
-# логотип программы
 def show_logo():
     logo_art = f"""
 {Fore.LIGHTRED_EX}
@@ -96,13 +97,11 @@ def show_logo():
  | | |_ |/ _ \ '_ \  / /\ \| __/ _ \ '__| '_ \ / _ \/ __| |\/| | |     
  | |__| |  __/ | | |/ ____ \ ||  __/ |  | | | | (_) \__ \ |  | | |____ 
   \_____|\___|_| |_/_/    \_\__\___|_|  |_| |_|\___/|___/_|  |_|\_____|
-                                                                                                                                        
     """
     for line in logo_art.split('\n'):
         print(line)
         time.sleep(0.2)
 
-# Функция запуска сервера и управления его состоянием
 def start_server(session_cookie, server_id, server_ip):
     driver = setup_chrome_driver()
     try:
@@ -152,7 +151,6 @@ if __name__ == '__main__':
     os.system('cls' if os.name == 'nt' else 'clear')
     show_logo()
 
-    # Вывод инструкций по использованию
     print(f"""
 {Fore.LIGHTYELLOW_EX}╭─────────────────────────────────━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─────────────────────────────╮
 | {Fore.LIGHTGREEN_EX}Использование » {Fore.LIGHTWHITE_EX}python {os.path.basename(__file__)} [session_cookie] [server_id] [server_ip]           {Fore.LIGHTYELLOW_EX}|
@@ -161,10 +159,7 @@ if __name__ == '__main__':
 ╰─────────────────────────────────━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─────────────────────────────╯
 """)
 
-    log_manager = LogManager()
     config_path = 'config.json'
-
-    # Загрузка конфигурации из JSON-файла
     with open(config_path, 'r') as config_file:
         config = json.load(config_file)
         ip_address = config['aternos_server']['ip']
@@ -175,9 +170,7 @@ if __name__ == '__main__':
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сервера: {Fore.LIGHTGREEN_EX}{server_identifier}{Style.RESET_ALL}')
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сессии: {Fore.LIGHTGREEN_EX}{session_id}{Style.RESET_ALL}')
 
-    # === ЗАПУСКАЕМ FLASK-СЕРВЕР ДЛЯ ПИНГА ===
     flask_thread.start()
     print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Flask-сервер запущен на порту 8080 для пинга')
 
-    # === ЗАПУСКАЕМ ОСНОВНУЮ ЛОГИКУ ===
     start_server(session_id, server_identifier, ip_address)
