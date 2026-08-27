@@ -1,17 +1,14 @@
 import os
-from colorama import Fore, Style
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from flask import Flask
+import threading
 import time
-from datetime import datetime
 import random
 import json
-import threading
-from flask import Flask
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 # ========== Flask для пинга ==========
 app = Flask('')
@@ -26,37 +23,28 @@ def run_flask():
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 # ====================================
 
-class LogManager:
-    def log_to_file(self, message=None, filename='activity_log.txt'):
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(filename, 'a') as file:
-            file.write(f'[{current_time}] {message}\n')
+def setup_remote_driver():
+    """Подключается к Selenium Standalone Chrome (отдельный сервис)"""
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
 
-    def delay_execution(self, seconds):
-        time.sleep(seconds)
-
-def setup_chrome_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    chrome_options.add_argument(f"--user-agent={user_agent}")
-
-    # Указываем пути к системному Chromium и chromedriver (установлены через Aptfile)
-    chrome_options.binary_location = "/usr/bin/chromium-browser"
-    service = Service(executable_path="/usr/bin/chromedriver")
-
-    return webdriver.Chrome(service=service, options=chrome_options)
+    # Внутри Railway используем внутренний адрес сервиса "selenium"
+    # Название сервиса задаётся при создании, по умолчанию "selenium"
+    driver = webdriver.Remote(
+        command_executor="http://selenium:4444/wd/hub",
+        options=options
+    )
+    return driver
 
 def maintain_server_connection(driver):
-    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Инициализация поддержания активности сервера')
+    print(f'[GenAternosMC] Инициализация поддержания активности сервера')
     while True:
         try:
             extend_button = WebDriverWait(driver, 10).until(
@@ -64,9 +52,9 @@ def maintain_server_connection(driver):
                     (By.XPATH, '//div[@class="extend"]/button[@class="btn btn-tiny btn-success server-extend-end"]'))
             )
             extend_button.click()
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.GREEN}Соединение с сервером продлено{Style.RESET_ALL}')
+            print(f'[GenAternosMC] Соединение с сервером продлено')
         except KeyboardInterrupt:
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Получен сигнал прерывания (Ctrl+C)')
+            print(f'[GenAternosMC] Получен сигнал прерывания (Ctrl+C)')
             break
         except Exception as e:
             try:
@@ -74,7 +62,7 @@ def maintain_server_connection(driver):
                     EC.presence_of_element_located(
                         (By.XPATH, '//*[@id="read-our-tos"]/main/section/div[3]/div[2]/div[1]/div/div/div[1]/div[1]/div'))
                 ).text
-                print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Таймер: {Fore.LIGHTGREEN_EX}{timer_text}{Style.RESET_ALL}')
+                print(f'[GenAternosMC] Таймер: {timer_text}')
             except:
                 pass
             handle_ad_popup(driver)
@@ -90,32 +78,28 @@ def handle_ad_popup(driver):
         return False
 
 def show_logo():
-    logo_art = f"""
-{Fore.LIGHTRED_EX}
+    logo = """
    _____                    _                            __  __  _____ 
   / ____|              /\  | |                          |  \/  |/ ____|
  | |  __  ___ _ __    /  \ | |_ ___ _ __ _ __   ___  ___| \  / | |     
  | | |_ |/ _ \ '_ \  / /\ \| __/ _ \ '__| '_ \ / _ \/ __| |\/| | |     
  | |__| |  __/ | | |/ ____ \ ||  __/ |  | | | | (_) \__ \ |  | | |____ 
   \_____|\___|_| |_/_/    \_\__\___|_|  |_| |_|\___/|___/_|  |_|\_____|
-                                                                        
     """
-    for line in logo_art.split('\n'):
-        print(line)
-        time.sleep(0.2)
+    print(logo)
 
 def start_server(session_cookie, server_id, server_ip):
-    driver = setup_chrome_driver()
+    driver = setup_remote_driver()
     try:
-        print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Chrome драйвер запущен')
+        print('[GenAternosMC] Remote драйвер подключен')
         time.sleep(3)
         driver.get('https://aternos.org/servers/')
-        print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Инициализация сервера...')
+        print('[GenAternosMC] Инициализация сервера...')
         driver.add_cookie({'name': 'ATERNOS_SESSION', 'value': session_cookie})
         driver.add_cookie({'name': "ATERNOS_SERVER", 'value': server_id})
         time.sleep(1)
         driver.get('https://aternos.org/server/')
-        print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Переход на страницу управления сервером')
+        print('[GenAternosMC] Переход на страницу управления сервером')
         driver.refresh()
         handle_ad_popup(driver)
         driver.refresh()
@@ -126,55 +110,50 @@ def start_server(session_cookie, server_id, server_ip):
         server_status = server_status_element.text
 
         if "Оффлайн" in server_status:
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер {Fore.LIGHTRED_EX}оффлайн{Style.RESET_ALL}, пробуем запустить...')
+            print('[GenAternosMC] Сервер оффлайн, пробуем запустить...')
             time.sleep(3)
             driver.find_element(By.XPATH, '//*[@id="start"]').click()
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер {Fore.LIGHTYELLOW_EX}запускается{Style.RESET_ALL}...')
+            print('[GenAternosMC] Сервер запускается...')
         elif 'Запуск' in server_status:
             time.sleep(3)
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер в процессе запуска...')
+            print('[GenAternosMC] Сервер в процессе запуска...')
             time.sleep(35)
             if 'Онлайн' in driver.find_element(By.XPATH,
                                                '//*[@id="read-our-tos"]/main/section/div[3]/div[2]/div[1]/div/span[1]/span').text:
-                print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер {Fore.LIGHTGREEN_EX}онлайн{Fore.LIGHTBLUE_EX}, поддержание соединения...')
+                print('[GenAternosMC] Сервер онлайн, поддержание соединения...')
                 maintain_server_connection(driver)
         elif 'Онлайн' in server_status:
-            print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Сервер уже {Fore.LIGHTGREEN_EX}онлайн{Fore.LIGHTBLUE_EX}, поддержание соединения...')
+            print('[GenAternosMC] Сервер уже онлайн, поддержание соединения...')
             maintain_server_connection(driver)
     except KeyboardInterrupt:
-        print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTYELLOW_EX}Нажата комбинация клавиш CTRL+C, завершение работы...{Style.RESET_ALL}')
+        print('[GenAternosMC] Нажата комбинация CTRL+C, завершение...')
     except Exception as e:
-        print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTYELLOW_EX}Произошла ошибка: {Fore.LIGHTRED_EX}{e}')
+        print(f'[GenAternosMC] Ошибка: {e}')
     finally:
         driver.quit()
 
 if __name__ == '__main__':
     os.system('cls' if os.name == 'nt' else 'clear')
     show_logo()
-
-    print(f"""
-{Fore.LIGHTYELLOW_EX}╭─────────────────────────────────━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─────────────────────────────╮
-| {Fore.LIGHTGREEN_EX}Использование » {Fore.LIGHTWHITE_EX}python {os.path.basename(__file__)} [session_cookie] [server_id] [server_ip]           {Fore.LIGHTYELLOW_EX}|
-| {Fore.LIGHTGREEN_EX}Пример » {Fore.LIGHTBLUE_EX}python {os.path.basename(__file__)} my_cookie my_server_id 192.168.0.1                        {Fore.LIGHTYELLOW_EX}|
-| {Fore.LIGHTGREEN_EX}Описание » Скрипт для автоматической загрузки сервера на Aternos                          {Fore.LIGHTYELLOW_EX}|
-╰─────────────────────────────────━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─────────────────────────────╯
+    print("""
+╭──────────────────────────────────────────────────────╮
+│ Использование: python GenAternosMC.py               │
+│ (читает config.json)                                │
+╰──────────────────────────────────────────────────────╯
 """)
-
-    log_manager = LogManager()
     config_path = 'config.json'
-
     with open(config_path, 'r') as config_file:
         config = json.load(config_file)
         ip_address = config['aternos_server']['ip']
         server_identifier = config['aternos_server']['server_id']
         session_id = config['aternos_server']['session_cookie']
 
-    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен IP: {Fore.LIGHTGREEN_EX}{ip_address}{Style.RESET_ALL}')
-    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сервера: {Fore.LIGHTGREEN_EX}{server_identifier}{Style.RESET_ALL}')
-    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» {Fore.LIGHTWHITE_EX}Получен идентификатор сессии: {Fore.LIGHTGREEN_EX}{session_id}{Style.RESET_ALL}')
+    print(f'[GenAternosMC] Получен IP: {ip_address}')
+    print(f'[GenAternosMC] Получен ID сервера: {server_identifier}')
+    print(f'[GenAternosMC] Получена сессия: {session_id[:20]}...')
 
     # Запуск Flask
     flask_thread.start()
-    print(f'{Fore.LIGHTYELLOW_EX}[ {Fore.LIGHTRED_EX}GenAternosMC {Fore.LIGHTYELLOW_EX}] {Fore.LIGHTBLUE_EX}» Flask-сервер запущен на порту 8080 для пинга')
+    print('[GenAternosMC] Flask-сервер запущен на порту 8080 для пинга')
 
     start_server(session_id, server_identifier, ip_address)
