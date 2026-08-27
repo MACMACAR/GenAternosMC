@@ -1,3 +1,4 @@
-undetected-chromedriver
-colorama
 selenium
+undetected-chromedriver
+flask
+colorama
